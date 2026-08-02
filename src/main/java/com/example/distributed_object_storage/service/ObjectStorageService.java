@@ -1,89 +1,51 @@
 package com.example.distributed_object_storage.service;
 
-import com.example.distributed_object_storage.dto.ObjectRequest;
 import com.example.distributed_object_storage.dto.ObjectMetadata;
+import com.example.distributed_object_storage.dto.ObjectRequest;
 import org.springframework.stereotype.Service;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.LocalDateTime;
-import java.util.*;
+
+import java.util.List;
 
 @Service
 public class ObjectStorageService {
 
-    private final Map<String, ObjectMetadata> objectStore = new HashMap<>();
-    private static final String STORAGE_DIR = "storage";
+    private final MetadataService metadataService;
+    private final StorageService storageService;
 
-    private String generateObjectId(String filename) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(filename.getBytes());
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hashBytes) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 algorithm not available: " + e.getMessage());
-        }
+    public ObjectStorageService(MetadataService metadataService, StorageService storageService) {
+        this.metadataService = metadataService;
+        this.storageService = storageService;
     }
 
-    public ObjectMetadata createObject(ObjectRequest request) {
-        String objectId = generateObjectId(request.getName());
-        
-        // Store actual file to filesystem
-        try {
-            File storageFolder = new File(STORAGE_DIR);
-            if (!storageFolder.exists()) {
-                storageFolder.mkdir();
-            }
-            
-            File file = new File(STORAGE_DIR + File.separator + objectId);
-            try (FileOutputStream fos = new FileOutputStream(file)) {
-                fos.write(request.getContent());
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to store file: " + e.getMessage());
-        }
-        
-        ObjectMetadata metadata = new ObjectMetadata();
-        metadata.setId(objectId);
-        metadata.setName(request.getName());
-        metadata.setContentType(request.getContentType());
-        metadata.setSize(request.getSize());
-        metadata.setCreatedAt(LocalDateTime.now());
-        metadata.setUpdatedAt(LocalDateTime.now());
-        metadata.setStatus("ACTIVE");
-
-        objectStore.put(objectId, metadata);
-        return metadata;
+    public ObjectMetadata createObject(String userId, ObjectRequest request) {
+        String storageKey = userId + "/" + request.getName();
+        storageService.storeObject(storageKey, request.getContent());
+        return metadataService.createMetadata(request, storageKey);
     }
 
     public ObjectMetadata getObject(String objectId) {
-        return objectStore.get(objectId);
+        return metadataService.getMetadata(objectId);
     }
 
     public List<ObjectMetadata> getAllObjects() {
-        return new ArrayList<>(objectStore.values());
+        return metadataService.getAllMetadata();
     }
 
     public ObjectMetadata updateObject(String objectId, ObjectRequest request) {
-        ObjectMetadata existing = objectStore.get(objectId);
-        if (existing != null) {
-            existing.setName(request.getName());
-            existing.setContentType(request.getContentType());
-            existing.setSize(request.getSize());
-            existing.setUpdatedAt(LocalDateTime.now());
+        ObjectMetadata existing = metadataService.getMetadata(objectId);
+        if (existing == null) {
+            return null;
         }
-        return existing;
+
+        metadataService.updateMetadata(objectId, request);
+        storageService.storeObject(existing.getStorageKey(), request.getContent());
+        return metadataService.getMetadata(objectId);
     }
 
     public boolean deleteObject(String objectId) {
-        return objectStore.remove(objectId) != null;
+        ObjectMetadata existing = metadataService.getMetadata(objectId);
+        boolean metadataDeleted = metadataService.deleteMetadata(objectId);
+        boolean storageDeleted = existing != null && storageService.deleteObject(existing.getStorageKey());
+        return metadataDeleted || storageDeleted;
     }
 }

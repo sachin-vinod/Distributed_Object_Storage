@@ -20,15 +20,17 @@ public class ObjectController {
         this.objectStorageService = objectStorageService;
     }
 
-    @PostMapping
-    public ResponseEntity<ObjectMetadata> createObject(@RequestParam("file") MultipartFile file) throws IOException {
+    @PostMapping("/{userId}")
+    public ResponseEntity<ObjectMetadata> createObject(
+            @PathVariable String userId,
+            @RequestParam("file") MultipartFile file) throws IOException {
         ObjectRequest request = new ObjectRequest();
         request.setName(file.getOriginalFilename());
         request.setContent(file.getBytes());
         request.setContentType(file.getContentType());
         request.setSize(file.getSize());
-        
-        ObjectMetadata metadata = objectStorageService.createObject(request);
+
+        ObjectMetadata metadata = objectStorageService.createObject(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(metadata);
     }
 

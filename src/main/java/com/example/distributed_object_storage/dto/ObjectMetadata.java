@@ -16,4 +16,5 @@ public class ObjectMetadata {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String status;
+    private String storageKey;
 }
