@@ -28,6 +28,10 @@ public class StorageService {
     public void storeObject(String storageKey, byte[] content) {
         Path targetPath = resolvePath(storageKey);
         try {
+            Path parent = targetPath.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
             Files.write(targetPath, content == null ? new byte[0] : content);
         } catch (IOException exception) {
             throw new RuntimeException("Failed to store file: " + exception.getMessage(), exception);
