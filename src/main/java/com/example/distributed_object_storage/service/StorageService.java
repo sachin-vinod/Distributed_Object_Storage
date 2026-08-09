@@ -38,6 +38,19 @@ public class StorageService {
         }
     }
 
+    public byte[] getObjectContent(String storageKey) {
+        Path targetPath = resolvePath(storageKey);
+        try {
+            if (Files.exists(targetPath)) {
+                return Files.readAllBytes(targetPath);
+            } else {
+                return null;
+            }
+        } catch (IOException exception) {
+            throw new RuntimeException("Failed to read file: " + exception.getMessage(), exception);
+        }
+    }
+
     public boolean deleteObject(String storageKey) {
         try {
             return Files.deleteIfExists(resolvePath(storageKey));

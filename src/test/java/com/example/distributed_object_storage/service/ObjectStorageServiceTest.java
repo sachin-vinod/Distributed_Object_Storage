@@ -1,6 +1,6 @@
 package com.example.distributed_object_storage.service;
 
-import com.example.distributed_object_storage.dto.ObjectMetadata;
+import com.example.distributed_object_storage.dto.ObjectResponse;
 import com.example.distributed_object_storage.dto.ObjectRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -13,7 +13,6 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ObjectStorageServiceTest {
@@ -22,10 +21,9 @@ class ObjectStorageServiceTest {
     Path tempDir;
 
     @Test
-    void createUpdateAndDeleteObjectAcrossMetadataAndStorageServices() throws IOException {
+    void createAndDeleteObject() throws IOException {
         StorageService storageService = new StorageService(tempDir);
-        MetadataService metadataService = new MetadataService();
-        ObjectStorageService objectStorageService = new ObjectStorageService(metadataService, storageService);
+        ObjectStorageService objectStorageService = new ObjectStorageService(storageService);
 
         ObjectRequest createRequest = new ObjectRequest();
         createRequest.setName("hello.txt");
@@ -33,30 +31,18 @@ class ObjectStorageServiceTest {
         createRequest.setContentType("text/plain");
         createRequest.setSize(5);
 
-        ObjectMetadata created = objectStorageService.createObject("user-1", createRequest);
+        ObjectResponse created = objectStorageService.createObject("user-1", createRequest);
 
         assertNotNull(created);
-        assertEquals("ACTIVE", created.getStatus());
-        assertEquals("user-1/hello.txt", created.getStorageKey());
-        assertNotNull(created.getId());
-        assertTrue(Files.exists(tempDir.resolve(created.getStorageKey())));
-        assertNotNull(objectStorageService.getObject(created.getId()));
+        assertEquals("hello.txt", created.getFilename());
+        assertEquals("text/plain", created.getContentType());
+        assertEquals(5, created.getSize());
 
-        ObjectRequest updateRequest = new ObjectRequest();
-        updateRequest.setName("updated.txt");
-        updateRequest.setContent("updated".getBytes(StandardCharsets.UTF_8));
-        updateRequest.setContentType("text/plain");
-        updateRequest.setSize(7);
+        String storageKey = "user-1/hello.txt";
+        assertTrue(Files.exists(tempDir.resolve(storageKey)));
+        assertEquals("hello", Files.readString(tempDir.resolve(storageKey), StandardCharsets.UTF_8));
 
-        ObjectMetadata updated = objectStorageService.updateObject(created.getId(), updateRequest);
-
-        assertNotNull(updated);
-        assertEquals("updated.txt", updated.getName());
-        assertTrue(Files.exists(tempDir.resolve(created.getStorageKey())));
-        assertEquals("updated", Files.readString(tempDir.resolve(created.getStorageKey()), StandardCharsets.UTF_8));
-
-        assertTrue(objectStorageService.deleteObject(created.getId()));
-        assertFalse(Files.exists(tempDir.resolve(created.getStorageKey())));
-        assertNull(objectStorageService.getObject(created.getId()));
+        assertTrue(objectStorageService.deleteObject("user-1", "hello.txt"));
+        assertFalse(Files.exists(tempDir.resolve(storageKey)));
     }
 }

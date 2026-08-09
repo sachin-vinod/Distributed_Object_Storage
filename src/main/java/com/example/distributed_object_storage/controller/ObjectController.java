@@ -1,14 +1,13 @@
 package com.example.distributed_object_storage.controller;
 
 import com.example.distributed_object_storage.dto.ObjectRequest;
-import com.example.distributed_object_storage.dto.ObjectMetadata;
+import com.example.distributed_object_storage.dto.ObjectResponse;
 import com.example.distributed_object_storage.service.ObjectStorageService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/objects")
@@ -21,7 +20,7 @@ public class ObjectController {
     }
 
     @PostMapping("/{userId}")
-    public ResponseEntity<ObjectMetadata> createObject(
+    public ResponseEntity<ObjectResponse> createObject(
             @PathVariable String userId,
             @RequestParam("file") MultipartFile file) throws IOException {
         ObjectRequest request = new ObjectRequest();
@@ -30,39 +29,27 @@ public class ObjectController {
         request.setContentType(file.getContentType());
         request.setSize(file.getSize());
 
-        ObjectMetadata metadata = objectStorageService.createObject(userId, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(metadata);
+        ObjectResponse response = objectStorageService.createObject(userId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @GetMapping("/{objectId}")
-    public ResponseEntity<ObjectMetadata> getObject(@PathVariable String objectId) {
-        ObjectMetadata metadata = objectStorageService.getObject(objectId);
-        if (metadata == null) {
+    @GetMapping("/{userId}/{filename}")
+    public ResponseEntity<byte[]> getObject(
+            @PathVariable String userId,
+            @PathVariable String filename) {
+        String storageKey = userId + "/" + filename;
+        byte[] content = objectStorageService.getObjectContent(storageKey);
+        if (content == null) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(metadata);
+        return ResponseEntity.ok(content);
     }
 
-    @GetMapping
-    public ResponseEntity<List<ObjectMetadata>> getAllObjects() {
-        List<ObjectMetadata> objects = objectStorageService.getAllObjects();
-        return ResponseEntity.ok(objects);
-    }
-
-    @PutMapping("/{objectId}")
-    public ResponseEntity<ObjectMetadata> updateObject(
-            @PathVariable String objectId,
-            @RequestBody ObjectRequest request) {
-        ObjectMetadata metadata = objectStorageService.updateObject(objectId, request);
-        if (metadata == null) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok(metadata);
-    }
-
-    @DeleteMapping("/{objectId}")
-    public ResponseEntity<Void> deleteObject(@PathVariable String objectId) {
-        boolean deleted = objectStorageService.deleteObject(objectId);
+    @DeleteMapping("/{userId}/{filename}")
+    public ResponseEntity<Void> deleteObject(
+            @PathVariable String userId,
+            @PathVariable String filename) {
+        boolean deleted = objectStorageService.deleteObject(userId, filename);
         if (!deleted) {
             return ResponseEntity.notFound().build();
         }
