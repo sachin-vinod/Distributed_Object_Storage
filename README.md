@@ -34,10 +34,63 @@ A simple distributed object storage style service built with Spring Boot. It exp
 - `PUT /api/objects/{objectId}` - update an object
 - `DELETE /api/objects/{objectId}` - delete an object
 
+## How to make GET and POST calls
+
+POST (curl) - upload a file:
+
+```bash
+curl -v -X POST "http://localhost:8080/api/objects" \
+  -F "file=@/path/to/file" \
+  -H "Accept: application/json"
+```
+
+Typical successful response:
+
+```http
+HTTP/1.1 201 Created
+Location: /api/objects/{objectId}
+Content-Type: application/json
+
+{ "objectId": "<objectId>", "name": "file.txt", "size": 1234 }
+```
+
+POST (JavaScript - fetch):
+
+```js
+const fd = new FormData();
+fd.append('file', fileInput.files[0]);
+fetch('http://localhost:8080/api/objects', { method: 'POST', body: fd })
+  .then(r => r.json())
+  .then(console.log);
+```
+
+GET list of objects (curl):
+
+```bash
+curl -s http://localhost:8080/api/objects
+```
+
+GET object metadata (curl):
+
+```bash
+curl -s http://localhost:8080/api/objects/{objectId}
+```
+
+## Request Flow (detailed)
+
+1. Client sends `POST /api/objects` with a multipart file.
+2. ObjectController validates the request and builds an ObjectRequest.
+3. ObjectStorageService generates an objectId (SHA-256 of name/contents) and coordinates persistence:
+   - StorageService writes the raw bytes to `storage/<objectId>`.
+   - MetadataService persists metadata (name, contentType, size, timestamps).
+4. Controller returns `201 Created` with `Location: /api/objects/{objectId}` and body containing object metadata.
+5. Subsequent `GET /api/objects/{objectId}` returns stored metadata; `GET /api/objects` lists objects.
+
 ## Flow Diagram
 
 ```text
 Client -> ObjectController -> ObjectStorageService
-                              -> MetadataService
-                              -> StorageService
+                              -> StorageService (writes storage/<objectId>)
+                              -> MetadataService (persists metadata)
+ObjectController <- 201 Created (Location: /api/objects/{objectId})
 ```
