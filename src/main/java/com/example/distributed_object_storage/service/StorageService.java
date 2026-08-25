@@ -1,65 +1,64 @@
 package com.example.distributed_object_storage.service;
 
+import com.example.distributed_object_storage.config.MinioConfig;
+import io.minio.BucketExistsArgs;
+import io.minio.MakeBucketArgs;
+import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
+import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.io.ByteArrayInputStream;
 
 @Service
 public class StorageService {
 
-    private final Path storageRoot;
+    private final MinioClient minioClient;
+    private final String bucketName;
 
-    public StorageService() {
-        this(Paths.get("storage").toAbsolutePath().normalize());
+    public StorageService(MinioClient minioClient, MinioConfig minioConfig) {
+        this.minioClient = minioClient;
+        this.bucketName = minioConfig.getBucketName();
     }
 
-    StorageService(Path storageRoot) {
-        this.storageRoot = storageRoot;
+    @PostConstruct
+    public void initBucket() {
         try {
-            Files.createDirectories(this.storageRoot);
-        } catch (IOException exception) {
-            throw new RuntimeException("Failed to initialize storage directory: " + exception.getMessage(), exception);
+            boolean exists = minioClient.bucketExists(
+                    BucketExistsArgs.builder().bucket(bucketName).build()
+            );
+            if (!exists) {
+                minioClient.makeBucket(
+                        MakeBucketArgs.builder().bucket(bucketName).build()
+                );
+            }
+        } catch (Exception exception) {
+            throw new RuntimeException("Failed to initialize MinIO bucket: " + exception.getMessage(), exception);
         }
     }
 
     public void storeObject(String storageKey, byte[] content) {
-        Path targetPath = resolvePath(storageKey);
         try {
-            Path parent = targetPath.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
+            byte[] data = content == null ? new byte[0] : content;
+            try (ByteArrayInputStream inputStream = new ByteArrayInputStream(data)) {
+                minioClient.putObject(
+                        PutObjectArgs.builder()
+                                .bucket(bucketName)
+                                .object(storageKey)
+                                .stream(inputStream, data.length, -1)
+                                .build()
+                );
             }
-            Files.write(targetPath, content == null ? new byte[0] : content);
-        } catch (IOException exception) {
-            throw new RuntimeException("Failed to store file: " + exception.getMessage(), exception);
+        } catch (Exception exception) {
+            throw new RuntimeException("Failed to store file in MinIO: " + exception.getMessage(), exception);
         }
     }
 
     public byte[] getObjectContent(String storageKey) {
-        Path targetPath = resolvePath(storageKey);
-        try {
-            if (Files.exists(targetPath)) {
-                return Files.readAllBytes(targetPath);
-            } else {
-                return null;
-            }
-        } catch (IOException exception) {
-            throw new RuntimeException("Failed to read file: " + exception.getMessage(), exception);
-        }
+        return null;
     }
 
     public boolean deleteObject(String storageKey) {
-        try {
-            return Files.deleteIfExists(resolvePath(storageKey));
-        } catch (IOException exception) {
-            throw new RuntimeException("Failed to delete file: " + exception.getMessage(), exception);
-        }
-    }
-
-    private Path resolvePath(String objectId) {
-        return storageRoot.resolve(objectId).normalize();
+        return false;
     }
 }
